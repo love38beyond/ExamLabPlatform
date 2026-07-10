@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Exam Dashboard - ExamLabPlatform{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dashboard { max-width: 960px; margin: 40px auto; padding: 0 20px; }
+  .header { background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 24px; }
+  .header h1 { font-size: 22px; color: #1a1a2e; }
+  .timer { font-size: 28px; font-weight: bold; color: #f44336; margin-top: 8px; }
+  .timer.warning { color: #FF9800; }
+  .cards { display: flex; gap: 16px; flex-wrap: wrap; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 20px; flex: 1; min-width: 200px; }
+  .card.windows { border-top: 4px solid #0078D4; }
+  .card.linux { border-top: 4px solid #f90; }
+  .card h3 { font-size: 16px; margin-bottom: 8px; }
+  .card .ip { color: #888; font-size: 13px; margin-bottom: 12px; }
+  .card .specs { font-size: 12px; color: #aaa; margin-bottom: 16px; }
+  .status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  .status.running { background: #4CAF50; }
+  .status.creating { background: #FF9800; }
+  .status.stopped { background: #f44336; }
+  .btn { display: inline-block; padding: 10px 20px; color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; text-align: center; }
+  .btn-primary { background: #6C63FF; }
+  .btn:hover { opacity: 0.9; }
+  .user-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .logout { color: #666; text-decoration: none; font-size: 14px; }
+  .empty { text-align: center; padding: 60px 20px; color: #888; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+  <div class="user-bar">
+    <span>Welcome, <strong>{{ user.name|default:user.username }}</strong></span>
+    <a href="{% url 'accounts:logout' %}" class="logout">Logout</a>
+  </div>
+
+  {% if not has_exam %}
+  <div class="empty">
+    <div style="font-size: 48px; margin-bottom: 16px;">No Active Exam</div>
+    <p>No active exam found or your VMs have not been assigned yet.</p>
+    <p style="color: #aaa;">Please contact the administrator if you believe this is an error.</p>
+  </div>
+  {% else %}
+  <div class="header">
+    <h1>{{ exam.name }}</h1>
+    <div class="timer {% if remaining_minutes < 15 %}warning{% endif %}">
+      Remaining: {{ remaining_minutes }} minutes
+    </div>
+  </div>
+
+  <div class="cards">
+    {% if windows_vm %}
+    <div class="card windows">
+      <h3>Windows Management Machine</h3>
+      <div class="ip">
+        <span class="status {{ windows_vm.status }}"></span>
+        {{ windows_vm.private_ip|default:"Waiting for IP..." }}
+        &middot; {{ windows_vm.get_status_display }}
+      </div>
+      <div class="specs">
+        {{ windows_vm.cpu }} CPU &middot; {{ windows_vm.ram }}GB RAM &middot; {{ windows_vm.disk }}GB Disk
+      </div>
+      {% if windows_vm.status == "running" %}
+      <a href="{% url 'exams:connect' windows_vm.id %}" class="btn btn-primary" target="_blank">
+        Connect
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% for vm in linux_vms %}
+    <div class="card linux">
+      <h3>{{ vm.role_label|default:"Linux Server" }}</h3>
+      <div class="ip">
+        <span class="status {{ vm.status }}"></span>
+        {{ vm.private_ip|default:"Waiting for IP..." }}
+        &middot; {{ vm.get_status_display }}
+      </div>
+      <div class="specs">
+        {{ vm.cpu }} CPU &middot; {{ vm.ram }}GB RAM &middot; {{ vm.disk }}GB Disk
+      </div>
+      <div style="font-size: 12px; color: #888;">
+        SSH accessible from Windows machine at {{ vm.private_ip|default:"auto-assigned IP" }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

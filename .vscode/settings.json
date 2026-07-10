@@ -1,0 +1,5 @@
+{
+    "chat.editor.claude.preferAgentHost": true,
+    "chat.agents.claude.preferAgentHost": true,
+    "chat.useClaudeHooks": true
+}
