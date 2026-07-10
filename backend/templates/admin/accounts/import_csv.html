@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<h1>Batch Import Students</h1>
+<p style="margin-bottom:16px;">Upload CSV file with columns: <code>username,name,password</code> (password is optional, defaults to username+@123)</p>
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="csv_file" accept=".csv" required>
+    <button type="submit" class="button" style="margin-top:12px;">Upload and Import</button>
+</form>
+<div style="margin-top:24px;">
+    <a href="../">Back to student list</a>
+</div>
+{% endblock %}
