@@ -1,0 +1,2 @@
+-- init/init-db.sql
+-- Guacamole schema is auto-created by guacamole container on first boot.
