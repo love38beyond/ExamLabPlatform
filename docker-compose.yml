@@ -29,7 +29,7 @@ services:
     privileged: true  # Required for CentOS 7 kernel 3.10
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init/:/docker-entrypoint-initdb.d/:ro
     environment:
       POSTGRES_DB: examlab
       POSTGRES_USER: examlab

@@ -120,7 +120,7 @@ def get_connection_url(vm_instance) -> str:
         conn_id = create_rdp_connection(
             name=f"{vm_instance.group.student.username}-{vm_instance.role_label}",
             hostname=vm_instance.private_ip,
-            port=vm_instance.rdp_port,
+            port=getattr(vm_instance, "rdp_port", 3389) or 3389,
             username=vm_instance.admin_username,
             password=vm_instance.admin_password,
         )
