@@ -85,7 +85,53 @@ Write-Host "[OK] Exam scripts created in C:\ExamScripts" -ForegroundColor Green
 
 
 # ============================================================
-# 第 5 段：验证配置
+# 第 5 段：创建无人值守文件（跳过 OOBE，关键！）
+# ============================================================
+
+$unattend = @'
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+    <settings pass="oobeSystem">
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <OOBE>
+                <SkipMachineOOBE>true</SkipMachineOOBE>
+                <SkipUserOOBE>true</SkipUserOOBE>
+                <ProtectYourPC>3</ProtectYourPC>
+            </OOBE>
+            <UserAccounts>
+                <AdministratorPassword>
+                    <Value></Value>
+                    <PlainText>true</PlainText>
+                </AdministratorPassword>
+            </UserAccounts>
+            <TimeZone>China Standard Time</TimeZone>
+            <RegisteredOwner>ExamLab</RegisteredOwner>
+        </component>
+    </settings>
+    <settings pass="specialize">
+        <component name="Microsoft-Windows-TerminalServices-LocalSessionManager" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <fDenyTSConnections>false</fDenyTSConnections>
+        </component>
+        <component name="Microsoft-Windows-TerminalServices-RDP-WinStationExtensions" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <UserAuthentication>0</UserAuthentication>
+        </component>
+        <component name="Networking-MPSSVC-Svc" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <FirewallGroup>
+                <Group>Remote Desktop</Group>
+                <Active>true</Active>
+                <Profile>all</Profile>
+            </FirewallGroup>
+        </component>
+    </settings>
+</unattend>
+'@
+
+$unattend | Out-File -FilePath "C:\Windows\System32\Sysprep\unattend.xml" -Encoding UTF8
+Write-Host "[OK] unattend.xml created (skip OOBE, enable RDP)" -ForegroundColor Green
+
+
+# ============================================================
+# 第 6 段：验证配置
 # ============================================================
 
 Write-Host "`n========================================" -ForegroundColor Cyan
@@ -127,5 +173,5 @@ if ($chrome) {
 
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "  All checks passed! Ready to Sysprep." -ForegroundColor Cyan
-Write-Host "  Run: C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown" -ForegroundColor Cyan
+Write-Host "  Run: C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown /unattend:unattend.xml" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
