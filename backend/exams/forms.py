@@ -15,14 +15,21 @@ class VmSpecWidget(forms.Widget):
     def format_value(self, value):
         if isinstance(value, str):
             try:
-                return json.loads(value)
+                data = json.loads(value)
+                data.setdefault("windows", None)
+                data.setdefault("linux_servers", [])
+                return data
             except (json.JSONDecodeError, TypeError):
                 return self._default_spec()
-        return value if value else self._default_spec()
+        if not value:
+            return self._default_spec()
+        value.setdefault("windows", None)
+        value.setdefault("linux_servers", [])
+        return value
 
     def _default_spec(self):
         return {
-            "windows": {"cpu": 2, "ram": 4, "disk": 50, "image_id": ""},
+            "windows": None,
             "linux_servers": [],
         }
 
@@ -42,13 +49,19 @@ class VmSpecWidget(forms.Widget):
                     "image_id": data.get(f"{name}_linux_image_id_{i}", "").strip(),
                 })
 
-            spec = {
-                "windows": {
+            # Windows is optional — null when unchecked
+            win_enabled = data.get(f"{name}_win_enabled") == "1"
+            windows = None
+            if win_enabled:
+                windows = {
                     "cpu": int(data.get(f"{name}_win_cpu", 2)),
                     "ram": int(data.get(f"{name}_win_ram", 4)),
                     "disk": int(data.get(f"{name}_win_disk", 50)),
                     "image_id": data.get(f"{name}_win_image_id", "").strip(),
-                },
+                }
+
+            spec = {
+                "windows": windows,
                 "linux_servers": linux_servers,
             }
             return json.dumps(spec, ensure_ascii=False)

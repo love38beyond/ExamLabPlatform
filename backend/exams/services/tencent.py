@@ -158,7 +158,7 @@ def create_vms_for_exam(exam) -> dict:
     from ..models import VmGroup, VmInstance
 
     vm_spec = exam.vm_spec
-    windows_spec = vm_spec.get("windows", {"cpu": 2, "ram": 4, "disk": 50})
+    windows_spec = vm_spec.get("windows")  # None if unchecked
     linux_servers = vm_spec.get("linux_servers", [])
 
     groups = VmGroup.objects.filter(exam=exam).select_related("student")
@@ -173,34 +173,35 @@ def create_vms_for_exam(exam) -> dict:
             group.security_group_id = sg_id
             group.save(update_fields=["security_group_id"])
 
-            # Create Windows VM
-            win_type = get_instance_type(windows_spec["cpu"], windows_spec["ram"])
-            password = generate_password()
-            win_ids = run_instances(
-                image_id=windows_spec.get("image_id", ""),
-                instance_type=win_type,
-                instance_count=1,
-                vpc_id=settings.TENCENT_VPC_ID,
-                subnet_id=settings.TENCENT_SUBNET_ID_PRIVATE,
-                security_group_ids=[sg_id],
-                instance_name_prefix=f"exam-{exam.id}-win-{group.student.username}",
-                password=password,
-                disk_size=windows_spec.get("disk", 50),
-            )
-
-            if win_ids:
-                VmInstance.objects.create(
-                    group=group,
-                    vm_type=VmInstance.VmType.WINDOWS,
-                    role_label="Windows",
-                    cpu=windows_spec["cpu"],
-                    ram=windows_spec["ram"],
-                    disk=windows_spec["disk"],
+            # Create Windows VM (optional)
+            if windows_spec:
+                win_type = get_instance_type(windows_spec["cpu"], windows_spec["ram"])
+                password = generate_password()
+                win_ids = run_instances(
                     image_id=windows_spec.get("image_id", ""),
-                    cvm_instance_id=win_ids[0],
-                    admin_password=password,
-                    status=VmInstance.Status.CREATING,
+                    instance_type=win_type,
+                    instance_count=1,
+                    vpc_id=settings.TENCENT_VPC_ID,
+                    subnet_id=settings.TENCENT_SUBNET_ID_PRIVATE,
+                    security_group_ids=[sg_id],
+                    instance_name_prefix=f"exam-{exam.id}-win-{group.student.username}",
+                    password=password,
+                    disk_size=windows_spec.get("disk", 50),
                 )
+
+                if win_ids:
+                    VmInstance.objects.create(
+                        group=group,
+                        vm_type=VmInstance.VmType.WINDOWS,
+                        role_label="Windows",
+                        cpu=windows_spec["cpu"],
+                        ram=windows_spec["ram"],
+                        disk=windows_spec["disk"],
+                        image_id=windows_spec.get("image_id", ""),
+                        cvm_instance_id=win_ids[0],
+                        admin_password=password,
+                        status=VmInstance.Status.CREATING,
+                    )
 
             # Create Linux VMs
             linux_username = f"exam"

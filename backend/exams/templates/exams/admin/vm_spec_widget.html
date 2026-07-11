@@ -1,13 +1,25 @@
 <div class="vmspec-widget" id="{{ widget.attrs.id }}_container">
   {% with spec=widget.value %}
   <!-- ===== Windows VM ===== -->
-  <fieldset class="vmspec-section">
-    <legend>🖥️ Windows Management Machine</legend>
-    <div class="vmspec-row">
-      <label>CPU Cores: <input type="number" name="{{ widget.name }}_win_cpu" value="{{ spec.windows.cpu|default:2 }}" min="1" max="64" class="vmspec-int"></label>
-      <label>RAM (GB): <input type="number" name="{{ widget.name }}_win_ram" value="{{ spec.windows.ram|default:4 }}" min="1" max="256" class="vmspec-int"></label>
-      <label>Disk (GB): <input type="number" name="{{ widget.name }}_win_disk" value="{{ spec.windows.disk|default:50 }}" min="20" max="500" class="vmspec-int"></label>
-      <label>Image ID: <input type="text" name="{{ widget.name }}_win_image_id" value="{{ spec.windows.image_id|default:'' }}" placeholder="img-xxxxxxxx"></label>
+  <fieldset class="vmspec-section" id="{{ widget.attrs.id }}_win_section">
+    <legend>
+      <label style="cursor:pointer;font-weight:bold;">
+        <input type="checkbox"
+               name="{{ widget.name }}_win_enabled"
+               id="{{ widget.attrs.id }}_win_enabled"
+               value="1"
+               {% if spec.windows %}checked{% endif %}
+               onchange="document.getElementById('{{ widget.attrs.id }}_win_fields').style.display=this.checked?'':'none'">
+        🖥️ Windows Management Machine
+      </label>
+    </legend>
+    <div id="{{ widget.attrs.id }}_win_fields" style="{% if not spec.windows %}display:none{% endif %}">
+      <div class="vmspec-row">
+        <label>CPU Cores: <input type="number" name="{{ widget.name }}_win_cpu" value="{{ spec.windows.cpu|default:2 }}" min="1" max="64" class="vmspec-int"></label>
+        <label>RAM (GB): <input type="number" name="{{ widget.name }}_win_ram" value="{{ spec.windows.ram|default:4 }}" min="1" max="256" class="vmspec-int"></label>
+        <label>Disk (GB): <input type="number" name="{{ widget.name }}_win_disk" value="{{ spec.windows.disk|default:50 }}" min="20" max="500" class="vmspec-int"></label>
+        <label>Image ID: <input type="text" name="{{ widget.name }}_win_image_id" value="{{ spec.windows.image_id|default:'' }}" placeholder="img-xxxxxxxx"></label>
+      </div>
     </div>
   </fieldset>
 
@@ -19,7 +31,7 @@
       <div class="vmspec-linux-item" data-index="{{ forloop.counter0 }}">
         <button type="button" class="vmspec-remove" title="Remove this server">✕</button>
         <div class="vmspec-row">
-          <label>Role: <input type="text" name="{{ widget.name }}_linux_role_{{ forloop.counter0 }}" value="{{ item.role }}" placeholder="e.g. Web Server"></label>
+          <label>Role: <input type="text" name="{{ widget.name }}_linux_role_{{ forloop.counter0 }}" value="{{ item.role }}" placeholder="e.g. Web Server" list="vmspec_roles"></label>
           <label>CPU Cores: <input type="number" name="{{ widget.name }}_linux_cpu_{{ forloop.counter0 }}" value="{{ item.cpu|default:2 }}" min="1" max="64" class="vmspec-int"></label>
           <label>RAM (GB): <input type="number" name="{{ widget.name }}_linux_ram_{{ forloop.counter0 }}" value="{{ item.ram|default:2 }}" min="1" max="256" class="vmspec-int"></label>
           <label>Disk (GB): <input type="number" name="{{ widget.name }}_linux_disk_{{ forloop.counter0 }}" value="{{ item.disk|default:40 }}" min="20" max="500" class="vmspec-int"></label>
