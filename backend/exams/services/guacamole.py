@@ -1,7 +1,12 @@
-"""Apache Guacamole REST API client for managing RDP connections."""
+"""Apache Guacamole client for managing RDP connections.
+
+Uses direct PostgreSQL inserts for connection creation (more reliable than
+the REST API which can return opaque 500 errors on some versions).
+"""
 import logging
 import urllib.parse
 
+import psycopg2
 import requests
 from django.conf import settings
 
@@ -10,6 +15,20 @@ logger = logging.getLogger(__name__)
 GUAC_BASE = settings.GUACAMOLE_URL.rstrip("/")
 GUAC_USER = settings.GUACAMOLE_USER
 GUAC_PASS = settings.GUACAMOLE_PASSWORD
+
+# Database connection info for direct SQL operations
+DB_NAME = settings.DATABASES["default"]["NAME"]
+DB_USER = settings.DATABASES["default"]["USER"]
+DB_PASSWORD = settings.DATABASES["default"]["PASSWORD"]
+DB_HOST = settings.DATABASES["default"]["HOST"]
+DB_PORT = settings.DATABASES["default"]["PORT"]
+
+
+def _get_db_conn():
+    return psycopg2.connect(
+        dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=DB_PORT,
+    )
 
 
 def _auth_token() -> str:
@@ -22,22 +41,67 @@ def _auth_token() -> str:
         timeout=10,
     )
     resp.raise_for_status()
-    token = resp.json()["authToken"]
-    return token
+    return resp.json()["authToken"]
+
+
+def _ensure_root_group():
+    """Ensure ROOT connection group exists."""
+    conn = _get_db_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM guacamole_connection_group WHERE connection_group_name = 'ROOT'")
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO guacamole_connection_group (connection_group_name, type) "
+                "VALUES ('ROOT', 'ORGANIZATIONAL') RETURNING connection_group_id"
+            )
+            root_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO guacamole_connection_group_permission "
+                "(entity_id, connection_group_id, permission) VALUES (1, %s, 'ADMINISTER')",
+                (root_id,),
+            )
+            conn.commit()
+            logger.info("Created ROOT connection group (id=%s)", root_id)
+    finally:
+        conn.close()
 
 
 def create_rdp_connection(
     name, hostname, port, username, password, **kwargs
 ) -> str:
-    """Create an RDP connection in Guacamole. Returns connection ID."""
-    token = _auth_token()
-    data_source = "postgresql"
+    """Create an RDP connection in Guacamole via direct SQL. Returns connection ID."""
+    _ensure_root_group()
 
-    # Build connection parameters
-    params = {
-        "name": name,
-        "protocol": "rdp",
-        "parameters": {
+    conn = _get_db_conn()
+    try:
+        cur = conn.cursor()
+
+        # Check if connection already exists
+        cur.execute(
+            "SELECT connection_id FROM guacamole_connection "
+            "WHERE connection_name = %s AND parent_id = 1",
+            (name,),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            conn_id = existing[0]
+            # Update existing parameters
+            cur.execute(
+                "DELETE FROM guacamole_connection_parameter WHERE connection_id = %s",
+                (conn_id,),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO guacamole_connection (connection_name, parent_id, protocol) "
+                "VALUES (%s, 1, 'rdp') RETURNING connection_id",
+                (name,),
+            )
+            conn_id = cur.fetchone()[0]
+
+        # Merge defaults with kwargs
+        params = {
             "hostname": hostname,
             "port": str(port),
             "username": username,
@@ -50,39 +114,38 @@ def create_rdp_connection(
             "enable-drive": "false",
             "create-drive-path": "false",
             "enable-printing": "false",
-        },
-    }
+        }
+        params.update(kwargs)
 
-    # Merge extra params
-    params["parameters"].update(kwargs)
+        # Insert/update parameters
+        for key, val in params.items():
+            cur.execute(
+                "INSERT INTO guacamole_connection_parameter "
+                "(connection_id, parameter_name, parameter_value) VALUES (%s, %s, %s)",
+                (conn_id, key, str(val)),
+            )
 
-    url = f"{GUAC_BASE}/api/session/data/{data_source}/connections"
-    params_qs = urllib.parse.quote(token)
+        # Grant admin permission on the connection
+        cur.execute(
+            "INSERT INTO guacamole_connection_permission "
+            "(entity_id, connection_id, permission) VALUES (1, %s, 'ADMINISTER') "
+            "ON CONFLICT DO NOTHING",
+            (conn_id,),
+        )
 
-    resp = requests.post(
-        f"{url}?token={params_qs}",
-        json=params,
-        timeout=10,
-    )
-    resp.raise_for_status()
-    connection_id = resp.json()["identifier"]
-    logger.info("Created Guacamole connection %s for %s", connection_id, name)
-    return str(connection_id)
+        conn.commit()
+        action = "Updated" if existing else "Created"
+        logger.info("%s Guacamole connection %s for %s", action, conn_id, name)
+        return str(conn_id)
+    finally:
+        conn.close()
 
 
 def get_connection_token(connection_id: str) -> str:
     """Get a one-time connection token for a Guacamole connection."""
     token = _auth_token()
     data_source = "postgresql"
-
-    url = (
-        f"{GUAC_BASE}/api/session/data/{data_source}/connections/"
-        f"{connection_id}/parameters"
-    )
     params_qs = urllib.parse.quote(token)
-
-    resp = requests.get(f"{url}?token={params_qs}", timeout=10)
-    resp.raise_for_status()
 
     # Generate connection tunnel token
     connect_url = (
@@ -98,23 +161,24 @@ def get_connection_token(connection_id: str) -> str:
 
 
 def delete_connection(connection_id: str):
-    """Delete a Guacamole connection."""
-    token = _auth_token()
-    data_source = "postgresql"
-    url = (
-        f"{GUAC_BASE}/api/session/data/{data_source}/connections/"
-        f"{connection_id}"
-    )
-    params_qs = urllib.parse.quote(token)
-    resp = requests.delete(f"{url}?token={params_qs}", timeout=10)
-    resp.raise_for_status()
+    """Delete a Guacamole connection via direct SQL."""
+    conn = _get_db_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM guacamole_connection WHERE connection_id = %s",
+            (connection_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def get_connection_url(vm_instance) -> str:
     """Get the direct Guacamole iframe URL for a VM instance.
 
     Creates a Guacamole connection if one doesn't exist yet.
-    Returns a URL that can be embedded in an iframe.
+    Returns a URL to the Guacamole client that will auto-connect.
     """
     if not vm_instance.guacamole_connection_id:
         conn_id = create_rdp_connection(
@@ -127,7 +191,7 @@ def get_connection_url(vm_instance) -> str:
         vm_instance.guacamole_connection_id = conn_id
         vm_instance.save(update_fields=["guacamole_connection_id"])
 
-    token = get_connection_token(vm_instance.guacamole_connection_id)
+    token = _auth_token()
     return (
         f"/guacamole/#/client/{vm_instance.guacamole_connection_id}"
         f"?token={token}"
