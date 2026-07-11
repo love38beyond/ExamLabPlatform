@@ -4,3 +4,4 @@ django-environ>=0.11
 tencentcloud-sdk-python>=3.0
 requests>=2.31
 gunicorn>=21
+whitenoise>=6

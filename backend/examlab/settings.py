@@ -22,6 +22,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -93,3 +94,5 @@ TENCENT_SECURITY_GROUP_MGMT = os.environ.get("TENCENT_SECURITY_GROUP_MGMT", "")
 GUACAMOLE_URL = os.environ.get("GUACAMOLE_URL", "http://guacamole:8080/guacamole")
 GUACAMOLE_USER = os.environ.get("GUACAMOLE_USER", "guacadmin")
 GUACAMOLE_PASSWORD = os.environ.get("GUACAMOLE_PASSWORD", "guacadmin")
+
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
