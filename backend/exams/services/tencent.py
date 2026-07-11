@@ -68,8 +68,13 @@ def create_security_group(name: str) -> str:
 def run_instances(
     image_id, instance_type, instance_count, vpc_id, subnet_id,
     security_group_ids, instance_name_prefix, password="", disk_size=50,
+    user_data="",
 ):
-    """Create CVM instances. Returns list of instance IDs."""
+    """Create CVM instances. Optionally pass user_data for cloud-init.
+
+    user_data should be a base64-encoded shell script (Linux) or
+    PowerShell script (Windows). Max 16KB.
+    """
     client = _get_cvm_client()
     req = cvm_models.RunInstancesRequest()
     req.ImageId = image_id
@@ -88,6 +93,9 @@ def run_instances(
     )
     if password:
         req.LoginSettings = cvm_models.LoginSettings(Password=password)
+    if user_data:
+        import base64
+        req.UserData = base64.b64encode(user_data.encode()).decode()
 
     try:
         resp = client.RunInstances(req)
@@ -195,9 +203,19 @@ def create_vms_for_exam(exam) -> dict:
                 )
 
             # Create Linux VMs
+            linux_username = f"exam"
+            linux_password = generate_password()
+
             for i, linux_spec in enumerate(linux_servers):
                 linux_type = get_instance_type(
                     linux_spec["cpu"], linux_spec["ram"]
+                )
+                # Build cloud-init script: create student account on first boot
+                linux_userdata = (
+                    f"#!/bin/bash\n"
+                    f"useradd -m {linux_username} 2>/dev/null || true\n"
+                    f"echo '{linux_username}:{linux_password}' | chpasswd\n"
+                    f"echo '{linux_username} ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/{linux_username}\n"
                 )
                 linux_ids = run_instances(
                     image_id=linux_spec.get("image_id", ""),
@@ -210,6 +228,7 @@ def create_vms_for_exam(exam) -> dict:
                         f"exam-{exam.id}-linux{i+1}-{group.student.username}"
                     ),
                     disk_size=linux_spec.get("disk", 40),
+                    user_data=linux_userdata,
                 )
 
                 if linux_ids:
@@ -222,6 +241,8 @@ def create_vms_for_exam(exam) -> dict:
                         disk=linux_spec["disk"],
                         image_id=linux_spec.get("image_id", ""),
                         cvm_instance_id=linux_ids[0],
+                        admin_username=linux_username,
+                        admin_password=linux_password,
                         status=VmInstance.Status.CREATING,
                     )
 
