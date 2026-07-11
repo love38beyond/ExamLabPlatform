@@ -1,0 +1,75 @@
+.vmspec-widget { margin-bottom: 16px; }
+.vmspec-section {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #fafafa;
+}
+.vmspec-section legend {
+    font-weight: bold;
+    font-size: 14px;
+    padding: 0 8px;
+    color: #333;
+}
+.vmspec-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+}
+.vmspec-row label {
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    color: #666;
+    min-width: 100px;
+}
+.vmspec-row label input {
+    margin-top: 4px;
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+}
+.vmspec-int { width: 80px; }
+.vmspec-linux-item {
+    position: relative;
+    border: 1px dashed #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #fff;
+}
+.vmspec-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: #f44336;
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+}
+.vmspec-remove:hover { background: #d32f2f; }
+.vmspec-add {
+    background: #6C63FF;
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 8px;
+}
+.vmspec-add:hover { background: #5a52d5; }
+.vmspec-empty {
+    color: #999;
+    font-style: italic;
+    padding: 12px;
+    text-align: center;
+}

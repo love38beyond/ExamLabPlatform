@@ -1,0 +1,80 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+  {% if original.pk and original.status == 'ready' %}
+  <li>
+    <a href="create-vms/"
+       onclick="return confirm('This will create real cloud VM instances via Tencent Cloud API. Continue?');"
+       style="background:#4CAF50;color:#fff;font-weight:bold;">
+      🚀 Create VMs
+    </a>
+  </li>
+  {% endif %}
+  {% if original.pk and original.status == 'running' %}
+  <li>
+    <a href="create-vms/"
+       onclick="return confirm('VMs already created. Create again?');"
+       style="background:#FF9800;color:#fff;">
+      ⚠️ Re-create VMs
+    </a>
+  </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
+
+{% block after_field_sets %}
+  {% if vm_status_summary %}
+  <fieldset class="module aligned" style="margin-top:20px;">
+    <h2>VM Status Overview</h2>
+    <div style="overflow-x:auto;padding:16px;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="background:#f5f5f5;">
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Student</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Windows</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Linux VMs</th>
+            <th style="padding:8px;text-align:center;border-bottom:2px solid #ddd;">VMs</th>
+            <th style="padding:8px;text-align:left;border-bottom:2px solid #ddd;">Security Group</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in vm_status_summary %}
+          <tr style="{% if forloop.counter|divisibleby:2 %}background:#fafafa;{% endif %}">
+            <td style="padding:8px;font-weight:bold;">{{ row.student.username }}</td>
+            <td style="padding:8px;">
+              {% if row.windows %}
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                background:{% if row.windows.status == 'running' %}#4CAF50{% elif row.windows.status == 'creating' %}#FF9800{% else %}#f44336{% endif %};
+                margin-right:4px;"></span>
+              {{ row.windows.get_status_display }}
+              {% if row.windows.private_ip %}
+                <br><small style="color:#888;">{{ row.windows.private_ip }}</small>
+              {% endif %}
+              {% else %}<span style="color:#ccc;">—</span>{% endif %}
+            </td>
+            <td style="padding:8px;">
+              {% for vm in row.linux %}
+              <div style="margin-bottom:2px;">
+                <span style="display:inline-block;width:6px;height:6px;border-radius:50%;
+                  background:{% if vm.status == 'running' %}#4CAF50{% elif vm.status == 'creating' %}#FF9800{% else %}#f44336{% endif %};
+                  margin-right:4px;"></span>
+                {{ vm.role_label }}
+                {% if vm.private_ip %}<small style="color:#888;"> ({{ vm.private_ip }})</small>{% endif %}
+              </div>
+              {% empty %}<span style="color:#ccc;">—</span>{% endfor %}
+            </td>
+            <td style="padding:8px;text-align:center;">
+              <span style="font-weight:bold;color:#4CAF50;">{{ row.running }}</span> / {{ row.total }} running
+            </td>
+            <td style="padding:8px;">
+              {% if row.sg_id %}<code style="font-size:11px;">{{ row.sg_id|truncatechars:18 }}</code>{% else %}<span style="color:#ccc;">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </fieldset>
+  {% endif %}
+{% endblock %}

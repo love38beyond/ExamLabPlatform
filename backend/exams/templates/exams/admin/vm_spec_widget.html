@@ -1,0 +1,48 @@
+<div class="vmspec-widget" id="{{ widget.attrs.id }}_container">
+  {% with spec=widget.value %}
+  <!-- ===== Windows VM ===== -->
+  <fieldset class="vmspec-section">
+    <legend>🖥️ Windows Management Machine</legend>
+    <div class="vmspec-row">
+      <label>CPU Cores: <input type="number" name="{{ widget.name }}_win_cpu" value="{{ spec.windows.cpu|default:2 }}" min="1" max="64" class="vmspec-int"></label>
+      <label>RAM (GB): <input type="number" name="{{ widget.name }}_win_ram" value="{{ spec.windows.ram|default:4 }}" min="1" max="256" class="vmspec-int"></label>
+      <label>Disk (GB): <input type="number" name="{{ widget.name }}_win_disk" value="{{ spec.windows.disk|default:50 }}" min="20" max="500" class="vmspec-int"></label>
+      <label>Image ID: <input type="text" name="{{ widget.name }}_win_image_id" value="{{ spec.windows.image_id|default:'' }}" placeholder="img-xxxxxxxx"></label>
+    </div>
+  </fieldset>
+
+  <!-- ===== Linux Servers ===== -->
+  <fieldset class="vmspec-section">
+    <legend>🐧 Linux Target Servers</legend>
+    <div id="{{ widget.attrs.id }}_linux_list">
+      {% for item in spec.linux_servers %}
+      <div class="vmspec-linux-item" data-index="{{ forloop.counter0 }}">
+        <button type="button" class="vmspec-remove" title="Remove this server">✕</button>
+        <div class="vmspec-row">
+          <label>Role: <input type="text" name="{{ widget.name }}_linux_role_{{ forloop.counter0 }}" value="{{ item.role }}" placeholder="e.g. Web Server"></label>
+          <label>CPU Cores: <input type="number" name="{{ widget.name }}_linux_cpu_{{ forloop.counter0 }}" value="{{ item.cpu|default:2 }}" min="1" max="64" class="vmspec-int"></label>
+          <label>RAM (GB): <input type="number" name="{{ widget.name }}_linux_ram_{{ forloop.counter0 }}" value="{{ item.ram|default:2 }}" min="1" max="256" class="vmspec-int"></label>
+          <label>Disk (GB): <input type="number" name="{{ widget.name }}_linux_disk_{{ forloop.counter0 }}" value="{{ item.disk|default:40 }}" min="20" max="500" class="vmspec-int"></label>
+          <label>Image ID: <input type="text" name="{{ widget.name }}_linux_image_id_{{ forloop.counter0 }}" value="{{ item.image_id|default:'' }}" placeholder="img-yyyyyyyy"></label>
+        </div>
+      </div>
+      {% empty %}
+      <div class="vmspec-empty">No Linux servers configured. Click "Add Linux Server" below.</div>
+      {% endfor %}
+    </div>
+    <button type="button" class="vmspec-add" id="{{ widget.attrs.id }}_add">+ Add Linux Server</button>
+    <input type="hidden" name="{{ widget.name }}_linux_count" id="{{ widget.attrs.id }}_linux_count" value="{{ spec.linux_servers|length }}">
+  </fieldset>
+  {% endwith %}
+</div>
+
+<datalist id="vmspec_roles">
+  <option value="Web服务器">
+  <option value="应用服务器">
+  <option value="数据库服务器">
+  <option value="缓存服务器">
+  <option value="消息队列服务器">
+  <option value="文件服务器">
+  <option value="负载均衡器">
+  <option value="监控服务器">
+</datalist>
