@@ -35,31 +35,32 @@ def create_security_group(name: str) -> str:
     req.GroupName = name
     req.GroupDescription = f"Exam security group - {name}"
     resp = client.CreateSecurityGroup(req)
-    sg_id = resp.SecurityGroup.Id
+    sg_id = resp.SecurityGroup.SecurityGroupId
 
     # Allow all traffic within the same security group
-    policy_set = vpc_models.SecurityGroupPolicySet(
-        Ingress=[
-            vpc_models.SecurityGroupPolicy(
-                Protocol="ALL",
-                Port="ALL",
-                SecurityGroupId=sg_id,
-                Action="ACCEPT",
-            )
-        ],
-        Egress=[
-            vpc_models.SecurityGroupPolicy(
-                Protocol="ALL",
-                Port="ALL",
-                SecurityGroupId=sg_id,
-                Action="ACCEPT",
-            )
-        ],
-    )
-    policies_req = vpc_models.CreateSecurityGroupPoliciesRequest()
-    policies_req.SecurityGroupId = sg_id
-    policies_req.SecurityGroupPolicySet = policy_set
-    client.CreateSecurityGroupPolicies(policies_req)
+    def _make_policy(sg_id):
+        p = vpc_models.SecurityGroupPolicy()
+        p.Protocol = "ALL"
+        p.Port = "ALL"
+        p.SecurityGroupId = sg_id
+        p.Action = "ACCEPT"
+        return p
+
+    # Add ingress rule
+    in_policy_set = vpc_models.SecurityGroupPolicySet()
+    in_policy_set.Ingress = [_make_policy(sg_id)]
+    in_req = vpc_models.CreateSecurityGroupPoliciesRequest()
+    in_req.SecurityGroupId = sg_id
+    in_req.SecurityGroupPolicySet = in_policy_set
+    client.CreateSecurityGroupPolicies(in_req)
+
+    # Add egress rule (separate call required by API)
+    out_policy_set = vpc_models.SecurityGroupPolicySet()
+    out_policy_set.Egress = [_make_policy(sg_id)]
+    out_req = vpc_models.CreateSecurityGroupPoliciesRequest()
+    out_req.SecurityGroupId = sg_id
+    out_req.SecurityGroupPolicySet = out_policy_set
+    client.CreateSecurityGroupPolicies(out_req)
 
     logger.info("Created security group %s: %s", name, sg_id)
     return sg_id
@@ -81,18 +82,23 @@ def run_instances(
     req.InstanceType = instance_type
     req.InstanceCount = instance_count
     req.InstanceChargeType = "POSTPAID_BY_HOUR"
-    req.VirtualPrivateCloud = cvm_models.VirtualPrivateCloud(
-        VpcId=vpc_id,
-        SubnetId=subnet_id,
-    )
+    placement = cvm_models.Placement()
+    placement.Zone = settings.TENCENT_ZONE
+    req.Placement = placement
+    vpc = cvm_models.VirtualPrivateCloud()
+    vpc.VpcId = vpc_id
+    vpc.SubnetId = subnet_id
+    req.VirtualPrivateCloud = vpc
     req.SecurityGroupIds = security_group_ids
     req.InstanceName = instance_name_prefix
-    req.SystemDisk = cvm_models.SystemDisk(
-        DiskType="CLOUD_PREMIUM",
-        DiskSize=disk_size,
-    )
+    sys_disk = cvm_models.SystemDisk()
+    sys_disk.DiskType = "CLOUD_PREMIUM"
+    sys_disk.DiskSize = disk_size
+    req.SystemDisk = sys_disk
     if password:
-        req.LoginSettings = cvm_models.LoginSettings(Password=password)
+        login = cvm_models.LoginSettings()
+        login.Password = password
+        req.LoginSettings = login
     if user_data:
         import base64
         req.UserData = base64.b64encode(user_data.encode()).decode()

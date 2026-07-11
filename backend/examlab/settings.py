@@ -86,6 +86,7 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 TENCENT_SECRET_ID = os.environ.get("TENCENT_SECRET_ID", "")
 TENCENT_SECRET_KEY = os.environ.get("TENCENT_SECRET_KEY", "")
 TENCENT_REGION = os.environ.get("TENCENT_REGION", "ap-guangzhou")
+TENCENT_ZONE = os.environ.get("TENCENT_ZONE", "ap-guangzhou-2")
 TENCENT_VPC_ID = os.environ.get("TENCENT_VPC_ID", "")
 TENCENT_SUBNET_ID_PUBLIC = os.environ.get("TENCENT_SUBNET_ID_PUBLIC", "")
 TENCENT_SUBNET_ID_PRIVATE = os.environ.get("TENCENT_SUBNET_ID_PRIVATE", "")
