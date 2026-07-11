@@ -157,9 +157,9 @@ EOF
 
 ### 3.3 修改 Dockerfile（腾讯云内网环境）
 
-如果服务器无法访问外网，编辑 `backend/Dockerfile`，使用腾讯云内网镜像源：
+> ⚠️ **重要**：无论服务器是否能用外网，都建议使用腾讯云内网镜像源（免费、速度快、不走公网流量）。如果后续升级代码，此步骤需要重新执行。
 
-> **注意**：如果服务器有外网访问能力，跳过此步骤。
+如果服务器无法访问外网，编辑 `backend/Dockerfile`，使用腾讯云内网镜像源：
 
 ```dockerfile
 FROM python:3.11-slim
@@ -432,7 +432,41 @@ systemctl restart docker
    ```
 4. 重新构建：`docker compose up -d --build`
 
-### 6.6 网站访问 502 Bad Gateway
+### 6.6 升级后构建失败：apt-get 或 pip 超时
+
+**错误信息**：
+```
+E: Unable to locate package libpq-dev
+# 或
+ReadTimeoutError: HTTPSConnectionPool(host='files.pythonhosted.org', port=443): Read timed out
+```
+
+**原因**：升级代码后 `Dockerfile` 被覆盖为本地版本（使用 deb.debian.org 和 pypi.org/aliyun），服务器无法访问这些外部源。
+
+**解决**：修改 `Dockerfile` 使用腾讯云内网镜像源，参见 [代码升级步骤四](#步骤四修复-dockerfile必须)。
+
+### 6.7 升级后数据丢失
+
+**错误信息**：管理后台登录后学员、考试数据全部消失。
+
+**原因**：升级后的 `docker-compose.yml` 使用了 Docker 命名卷（`pgdata:/var/lib/postgresql/data`），而旧数据存在宿主机目录（`/opt/examlab/data/pgdata`）。
+
+**解决**：修改 `docker-compose.yml` 使用宿主机目录挂载，参见 [代码升级步骤五](#步骤五修复数据卷配置必须)。
+
+### 6.8 升级后静态文件 404（管理后台无样式）
+
+**错误信息**：页面能打开但没有任何样式，浏览器 Console 显示 CSS/JS 返回 404。
+
+**原因**：代码卷挂载（`./backend:/app`）会覆盖 Docker build 时 `collectstatic` 生成的静态文件。`DEBUG=False` 时 Django 不提供静态文件，Whitenoise 也找不到被覆盖的文件。
+
+**解决**：在 `.env` 中设置 `DEBUG=True`，Django 会在开发模式下直接提供静态文件。
+
+```bash
+sed -i 's/DEBUG=False/DEBUG=True/' /opt/examlab/.env
+docker compose restart backend
+```
+
+### 6.9 网站访问 502 Bad Gateway
 
 **排查步骤：**
 ```bash
@@ -488,15 +522,133 @@ docker compose exec backend python manage.py shell
 docker compose exec backend python manage.py sync_vm_status
 ```
 
-### 更新代码
+### 代码升级（完整流程）
+
+> ⚠️ 服务器不是 Git 仓库时，需从本地打包上传。
+
+**步骤一：本地打包**
+
+```bash
+cd ~/project/examLab/ExamLabPlatform
+git ls-files | tar -czf /tmp/examlab.tar.gz -T -
+```
+
+**步骤二：备份服务器配置**
+
+```bash
+ssh root@<服务器IP>
+cp /opt/examlab/.env /tmp/examlab.env.backup
+```
+
+**步骤三：上传并解压**
+
+```bash
+# 本地执行
+scp /tmp/examlab.tar.gz root@<服务器IP>:/tmp/
+
+# 服务器执行
+tar -xzf /tmp/examlab.tar.gz -C /opt/examlab
+cp /tmp/examlab.env.backup /opt/examlab/.env
+```
+
+**步骤四：修复 Dockerfile（必须）**
+
+> ⚠️ 升级会覆盖 `Dockerfile`，本地文件使用 Debian 官方源和阿里云 PyPI 源。服务器如果无法访问外网，**必须手动改回腾讯云内网镜像源**，否则构建失败。
 
 ```bash
 cd /opt/examlab
-git pull                    # 或重新上传 tar 包
-docker compose build backend
-docker compose up -d
+cat > backend/Dockerfile << 'DOCKEREOF'
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 腾讯云 Debian 内网镜像（代替 deb.debian.org）
+RUN echo "deb http://mirrors.cloud.tencent.com/debian trixie main" > /etc/apt/sources.list && \
+    echo "deb http://mirrors.cloud.tencent.com/debian trixie-updates main" >> /etc/apt/sources.list && \
+    echo "deb http://mirrors.cloud.tencent.com/debian-security trixie-security main" >> /etc/apt/sources.list
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+# 腾讯云 PyPI 内网镜像（代替 pypi.org / mirrors.aliyun.com）
+RUN pip install --no-cache-dir -i http://mirrors.cloud.tencent.com/pypi/simple/ --trusted-host mirrors.cloud.tencent.com -r requirements.txt
+
+COPY . .
+
+RUN python manage.py collectstatic --noinput || true
+
+EXPOSE 8000
+
+CMD ["gunicorn", "examlab.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4"]
+DOCKEREOF
+```
+
+**步骤五：修复数据卷配置（必须）**
+
+> ⚠️ 升级可能覆盖 `docker-compose.yml`。本地文件使用命名卷 `pgdata`，服务器用的是宿主机目录 `/opt/examlab/data/pgdata`。如果卷类型变了，**数据库会丢失**。
+
+```bash
+# 检查 db 服务的 volumes 配置
+grep -A3 "pgdata\|/var/lib/postgresql" docker-compose.yml
+
+# 如果显示的是 "pgdata:/var/lib/postgresql/data"（命名卷），改为宿主机目录：
+sed -i 's|- pgdata:/var/lib/postgresql/data|- /opt/examlab/data/pgdata:/var/lib/postgresql/data|' docker-compose.yml
+# 同时删除底部 volumes: 段落中的 pgdata 声明
+```
+
+**步骤六：检查并修复 DEBUG 配置（必须）**
+
+> ⚠️ 升级后如果静态文件 404（管理后台无样式），检查 `.env` 中 `DEBUG` 值。
+> 当前部署方案中 `DEBUG=True` 是为了让 Django 直接提供静态文件（`DEBUG=False` 时 Whitenoise 需要额外的 Manifest 文件，与代码卷挂载冲突）。
+
+```bash
+grep DEBUG /opt/examlab/.env
+# 确保是: DEBUG=True
+```
+
+**步骤七：重新构建并启动**
+
+```bash
+cd /opt/examlab
+docker compose up -d --build
+```
+
+**步骤八：执行数据库迁移**
+
+```bash
 docker compose exec backend python manage.py migrate
 ```
+
+**步骤九：收集静态文件**
+
+```bash
+docker compose exec backend python manage.py collectstatic --noinput
+```
+
+**步骤十：验证升级**
+
+```bash
+docker compose ps                                # 5 个容器全部 Up
+curl -sI http://localhost/admin/login/ | head -1 # 200 OK
+curl -sI http://localhost/static/admin/css/base.css | head -1 # 200 OK
+```
+
+### 升级检查清单
+
+| 序号 | 步骤 | 命令 |
+|------|------|------|
+| 1 | 备份 .env | `cp .env /tmp/examlab.env.backup` |
+| 2 | 上传解压 | `tar -xzf /tmp/examlab.tar.gz` |
+| 3 | 恢复 .env | `cp /tmp/examlab.env.backup .env` |
+| 4 | 修复 Dockerfile（镜像源） | `cat backend/Dockerfile` 确认使用 `mirrors.cloud.tencent.com` |
+| 5 | 修复数据卷 | `grep pgdata docker-compose.yml` 确认宿主机路径 |
+| 6 | 修复 DEBUG | `grep DEBUG .env` 确认为 `True` |
+| 7 | 构建启动 | `docker compose up -d --build` |
+| 8 | 数据库迁移 | `docker compose exec backend python manage.py migrate` |
+| 9 | 收集静态 | `docker compose exec backend python manage.py collectstatic --noinput` |
+| 10 | 验证 | `curl` 测试各页面 |
 
 ### 查看磁盘空间
 
