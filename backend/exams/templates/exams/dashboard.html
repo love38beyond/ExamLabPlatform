@@ -61,9 +61,9 @@
       <div class="specs">
         {{ windows_vm.cpu }} CPU &middot; {{ windows_vm.ram }}GB RAM &middot; {{ windows_vm.disk }}GB Disk
       </div>
-      {% if windows_vm.status == "running" %}
+      {% if windows_vm.status == "running" or windows_vm.status == "creating" %}
       <a href="{% url 'exams:connect' windows_vm.id %}" class="btn btn-primary" target="_blank">
-        Connect
+        {% if windows_vm.status == "creating" %}Connect (Syncing...){% else %}Connect{% endif %}
       </a>
       {% endif %}
     </div>

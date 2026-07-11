@@ -37,7 +37,6 @@ def create_security_group(name: str) -> str:
     resp = client.CreateSecurityGroup(req)
     sg_id = resp.SecurityGroup.SecurityGroupId
 
-    # Allow all traffic within the same security group
     def _make_policy(sg_id):
         p = vpc_models.SecurityGroupPolicy()
         p.Protocol = "ALL"
@@ -46,7 +45,7 @@ def create_security_group(name: str) -> str:
         p.Action = "ACCEPT"
         return p
 
-    # Add ingress rule
+    # Ingress: allow all within same SG
     in_policy_set = vpc_models.SecurityGroupPolicySet()
     in_policy_set.Ingress = [_make_policy(sg_id)]
     in_req = vpc_models.CreateSecurityGroupPoliciesRequest()
@@ -54,7 +53,7 @@ def create_security_group(name: str) -> str:
     in_req.SecurityGroupPolicySet = in_policy_set
     client.CreateSecurityGroupPolicies(in_req)
 
-    # Add egress rule (separate call required by API)
+    # Egress: allow all outbound
     out_policy_set = vpc_models.SecurityGroupPolicySet()
     out_policy_set.Egress = [_make_policy(sg_id)]
     out_req = vpc_models.CreateSecurityGroupPoliciesRequest()
