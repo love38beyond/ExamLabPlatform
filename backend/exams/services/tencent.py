@@ -139,17 +139,20 @@ def terminate_instances(instance_ids):
     client.TerminateInstances(req)
 
 
-def get_instance_type(cpu, ram):
-    """Map CPU/RAM to Tencent Cloud instance type."""
-    mapping = {
-        (1, 1): "S5.SMALL1",
-        (1, 2): "S5.SMALL2",
-        (2, 2): "S5.MEDIUM4",
-        (2, 4): "S5.MEDIUM2",
-        (4, 8): "S5.LARGE4",
-        (4, 16): "S5.LARGE8",
-    }
-    return mapping.get((cpu, ram), "S5.MEDIUM2")
+# Primary -> Fallback instance types for each CPU/RAM combo
+_INSTANCE_TYPE_FALLBACKS = {
+    (1, 1): ["S5.SMALL1", "S6.SMALL1"],
+    (1, 2): ["S5.SMALL2", "S6.SMALL2"],
+    (2, 2): ["S5.MEDIUM4", "S6.MEDIUM4"],
+    (2, 4): ["S5.MEDIUM2", "S6.MEDIUM2"],
+    (4, 8): ["S5.LARGE4", "S6.LARGE4"],
+    (4, 16): ["S5.LARGE8", "S6.LARGE8"],
+}
+
+
+def get_instance_types(cpu, ram):
+    """Return list of instance types in priority order, with fallbacks."""
+    return _INSTANCE_TYPE_FALLBACKS.get((cpu, ram), ["S5.MEDIUM2", "S6.MEDIUM2"])
 
 
 def generate_password(length=12):
@@ -158,12 +161,30 @@ def generate_password(length=12):
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
+def _try_run_instances(cpu, ram, **kwargs):
+    """Try to create instances, falling back to alternative types on stock shortage."""
+    types = get_instance_types(cpu, ram)
+    last_error = None
+    for t in types:
+        try:
+            return run_instances(instance_type=t, **kwargs)
+        except TencentCloudSDKException as e:
+            if "ResourceInsufficient" in str(e):
+                logger.warning(
+                    "Instance type %s out of stock, trying fallback", t
+                )
+                last_error = e
+                continue
+            raise
+    raise last_error
+
+
 def create_vms_for_exam(exam) -> dict:
     """Create all VMs for an exam. Returns {success: N, error: N}."""
     from ..models import VmGroup, VmInstance
 
     vm_spec = exam.vm_spec
-    windows_spec = vm_spec.get("windows")  # None if unchecked
+    windows_spec = vm_spec.get("windows")
     linux_servers = vm_spec.get("linux_servers", [])
 
     groups = VmGroup.objects.filter(exam=exam).select_related("student")
@@ -172,19 +193,17 @@ def create_vms_for_exam(exam) -> dict:
 
     for group in groups:
         try:
-            # Create security group for this student
             sg_name = f"exam-{exam.id}-student-{group.student_id}"
             sg_id = create_security_group(sg_name)
             group.security_group_id = sg_id
             group.save(update_fields=["security_group_id"])
 
-            # Create Windows VM (optional)
             if windows_spec:
-                win_type = get_instance_type(windows_spec["cpu"], windows_spec["ram"])
                 password = generate_password()
-                win_ids = run_instances(
+                win_ids = _try_run_instances(
+                    cpu=windows_spec["cpu"],
+                    ram=windows_spec["ram"],
                     image_id=windows_spec.get("image_id", ""),
-                    instance_type=win_type,
                     instance_count=1,
                     vpc_id=settings.TENCENT_VPC_ID,
                     subnet_id=settings.TENCENT_SUBNET_ID_PRIVATE,
@@ -208,24 +227,20 @@ def create_vms_for_exam(exam) -> dict:
                         status=VmInstance.Status.CREATING,
                     )
 
-            # Create Linux VMs
-            linux_username = f"exam"
+            linux_username = "exam"
             linux_password = generate_password()
 
             for i, linux_spec in enumerate(linux_servers):
-                linux_type = get_instance_type(
-                    linux_spec["cpu"], linux_spec["ram"]
-                )
-                # Build cloud-init script: create student account on first boot
                 linux_userdata = (
                     f"#!/bin/bash\n"
                     f"useradd -m {linux_username} 2>/dev/null || true\n"
                     f"echo '{linux_username}:{linux_password}' | chpasswd\n"
                     f"echo '{linux_username} ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/{linux_username}\n"
                 )
-                linux_ids = run_instances(
+                linux_ids = _try_run_instances(
+                    cpu=linux_spec["cpu"],
+                    ram=linux_spec["ram"],
                     image_id=linux_spec.get("image_id", ""),
-                    instance_type=linux_type,
                     instance_count=1,
                     vpc_id=settings.TENCENT_VPC_ID,
                     subnet_id=settings.TENCENT_SUBNET_ID_PRIVATE,
