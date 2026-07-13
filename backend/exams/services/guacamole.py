@@ -133,6 +133,29 @@ def create_rdp_connection(
             (conn_id,),
         )
 
+        # Create sharing profile with file transfer enabled
+        cur.execute(
+            "SELECT sharing_profile_id FROM guacamole_sharing_profile "
+            "WHERE primary_connection_id = %s",
+            (conn_id,),
+        )
+        if not cur.fetchone():
+            cur.execute(
+                "INSERT INTO guacamole_sharing_profile "
+                "(sharing_profile_name, primary_connection_id) "
+                "VALUES ('file-transfer', %s) RETURNING sharing_profile_id",
+                (conn_id,),
+            )
+            profile_id = cur.fetchone()[0]
+
+            cur.execute(
+                "INSERT INTO guacamole_sharing_profile_parameter "
+                "(sharing_profile_id, parameter_name, parameter_value) VALUES "
+                "(%s, 'ftp-disable-download', 'false'),"
+                "(%s, 'ftp-disable-upload', 'false')",
+                (profile_id, profile_id),
+            )
+
         conn.commit()
         action = "Updated" if existing else "Created"
         logger.info("%s Guacamole connection %s for %s", action, conn_id, name)
