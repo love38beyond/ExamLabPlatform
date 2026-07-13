@@ -230,6 +230,8 @@ class VmInstanceAdmin(admin.ModelAdmin):
         """Terminate cloud instances before bulk-deleting DB records."""
         from .services.tencent import terminate_instances
 
+        exam_ids = set(queryset.values_list("group__exam_id", flat=True))
+
         for instance in queryset:
             if instance.cvm_instance_id and instance.status != "terminated":
                 try:
@@ -237,3 +239,8 @@ class VmInstanceAdmin(admin.ModelAdmin):
                 except Exception:
                     pass
         super().delete_queryset(request, queryset)
+
+        from .models import Exam
+        for exam_id in exam_ids:
+            if not VmInstance.objects.filter(group__exam_id=exam_id).exists():
+                Exam.objects.filter(id=exam_id).update(status="draft")

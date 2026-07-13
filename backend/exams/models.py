@@ -92,6 +92,8 @@ class VmInstance(models.Model):
 
     def delete(self, *args, **kwargs):
         """Delete DB record AND terminate the actual CVM on Tencent Cloud."""
+        exam = self.group.exam
+
         if self.cvm_instance_id and self.status != self.Status.TERMINATED:
             try:
                 from .services.tencent import terminate_instances
@@ -109,3 +111,11 @@ class VmInstance(models.Model):
                     e,
                 )
         super().delete(*args, **kwargs)
+
+        # If no instances remain for this exam, reset status to DRAFT
+        if not VmInstance.objects.filter(group__exam=exam).exists():
+            exam.status = Exam.Status.DRAFT
+            exam.save(update_fields=["status"])
+            logger.info(
+                "Exam %s: all VMs deleted, status set to DRAFT", exam.id
+            )
