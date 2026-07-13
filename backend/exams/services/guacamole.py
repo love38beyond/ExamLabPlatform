@@ -136,7 +136,7 @@ def create_rdp_connection(
             (conn_id,),
         )
 
-        # Create sharing profile with file transfer enabled
+        # Create sharing profile for scoped access
         cur.execute(
             "SELECT sharing_profile_id FROM guacamole_sharing_profile "
             "WHERE primary_connection_id = %s",
@@ -146,7 +146,7 @@ def create_rdp_connection(
             cur.execute(
                 "INSERT INTO guacamole_sharing_profile "
                 "(sharing_profile_name, primary_connection_id) "
-                "VALUES ('file-transfer', %s) RETURNING sharing_profile_id",
+                "VALUES ('share', %s) RETURNING sharing_profile_id",
                 (conn_id,),
             )
             profile_id = cur.fetchone()[0]
@@ -163,6 +163,41 @@ def create_rdp_connection(
         action = "Updated" if existing else "Created"
         logger.info("%s Guacamole connection %s for %s", action, conn_id, name)
         return str(conn_id)
+    finally:
+        conn.close()
+
+
+def _get_or_create_sharing_profile(conn_id: str) -> str:
+    """Get or create a sharing profile for a connection."""
+    conn = _get_db_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT sharing_profile_id FROM guacamole_sharing_profile "
+            "WHERE primary_connection_id = %s",
+            (conn_id,),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return str(existing[0])
+
+        cur.execute(
+            "INSERT INTO guacamole_sharing_profile "
+            "(sharing_profile_name, primary_connection_id) "
+            "VALUES ('share', %s) RETURNING sharing_profile_id",
+            (conn_id,),
+        )
+        profile_id = cur.fetchone()[0]
+
+        cur.execute(
+            "INSERT INTO guacamole_sharing_profile_parameter "
+            "(sharing_profile_id, parameter_name, parameter_value) VALUES "
+            "(%s, 'ftp-disable-download', 'false'),"
+            "(%s, 'ftp-disable-upload', 'false')",
+            (profile_id, profile_id),
+        )
+        conn.commit()
+        return str(profile_id)
     finally:
         conn.close()
 
@@ -201,10 +236,11 @@ def delete_connection(connection_id: str):
 
 
 def get_connection_url(vm_instance) -> str:
-    """Get the direct Guacamole iframe URL for a VM instance.
+    """Get a Guacamole sharing link scoped to only this single connection.
 
-    Creates a Guacamole connection if one doesn't exist yet.
-    Returns a URL to the Guacamole client that will auto-connect.
+    Uses the Guacamole sharing profile API to generate a token that only
+    grants access to this specific connection. Other connections are not
+    visible to the user.
     """
     if not vm_instance.guacamole_connection_id:
         conn_id = create_rdp_connection(
@@ -217,8 +253,22 @@ def get_connection_url(vm_instance) -> str:
         vm_instance.guacamole_connection_id = conn_id
         vm_instance.save(update_fields=["guacamole_connection_id"])
 
+    conn_id = vm_instance.guacamole_connection_id
     token = _auth_token()
-    return (
-        f"/guacamole/#/client/{vm_instance.guacamole_connection_id}"
-        f"?token={token}"
+    params_qs = urllib.parse.quote(token)
+    profile_id = _get_or_create_sharing_profile(conn_id)
+
+    url = (
+        f"{GUAC_BASE}/api/session/data/postgresql"
+        f"/connections/{conn_id}/sharingProfiles/{profile_id}/links"
     )
+    resp = requests.post(
+        f"{url}?token={params_qs}",
+        json={},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    result = resp.json()
+    sharing_url = result.get("url", result.get("href", ""))
+    logger.info("Generated sharing link for connection %s", conn_id)
+    return sharing_url
