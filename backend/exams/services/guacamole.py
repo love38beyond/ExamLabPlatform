@@ -253,22 +253,8 @@ def get_connection_url(vm_instance) -> str:
         vm_instance.guacamole_connection_id = conn_id
         vm_instance.save(update_fields=["guacamole_connection_id"])
 
-    conn_id = vm_instance.guacamole_connection_id
     token = _auth_token()
-    params_qs = urllib.parse.quote(token)
-    profile_id = _get_or_create_sharing_profile(conn_id)
-
-    url = (
-        f"{GUAC_BASE}/api/session/data/postgresql"
-        f"/connections/{conn_id}/sharingProfiles/{profile_id}/links"
+    return (
+        f"/guacamole/#/client/{vm_instance.guacamole_connection_id}"
+        f"?token={token}"
     )
-    resp = requests.post(
-        f"{url}?token={params_qs}",
-        json={},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    result = resp.json()
-    sharing_url = result.get("url", result.get("href", ""))
-    logger.info("Generated sharing link for connection %s", conn_id)
-    return sharing_url
