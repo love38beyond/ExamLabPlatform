@@ -235,13 +235,45 @@ def delete_connection(connection_id: str):
         conn.close()
 
 
-def get_connection_url(vm_instance) -> str:
-    """Get a Guacamole sharing link scoped to only this single connection.
+def _create_user_token(conn_id: str) -> str:
+    """Create a per-connection Guacamole user with READ-only access."""
+    admin_token = _auth_token()
+    params_qs = urllib.parse.quote(admin_token)
+    username = f"user_{conn_id}"
+    password = f"pass_{conn_id}_{admin_token[:8]}"
 
-    Uses the Guacamole sharing profile API to generate a token that only
-    grants access to this specific connection. Other connections are not
-    visible to the user.
-    """
+    user_url = f"{GUAC_BASE}/api/session/data/postgresql/users/{username}"
+    resp = requests.get(f"{user_url}?token={params_qs}", timeout=10)
+    if resp.status_code != 200:
+        resp = requests.post(
+            f"{GUAC_BASE}/api/session/data/postgresql/users?token={params_qs}",
+            json={"username": username, "password": password, "attributes": {}},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        resp = requests.patch(
+            f"{user_url}/permissions?token={params_qs}",
+            json=[{
+                "op": "add",
+                "path": f"/connectionPermissions/{conn_id}",
+                "value": "READ",
+            }],
+            timeout=10,
+        )
+        resp.raise_for_status()
+
+    resp = requests.post(
+        f"{GUAC_BASE}/api/tokens",
+        data={"username": username, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["authToken"]
+
+
+def get_connection_url(vm_instance) -> str:
+    """Get a Guacamole URL scoped to only this single VM."""
     if not vm_instance.guacamole_connection_id:
         conn_id = create_rdp_connection(
             name=f"{vm_instance.group.student.username}-{vm_instance.role_label}",
@@ -253,7 +285,7 @@ def get_connection_url(vm_instance) -> str:
         vm_instance.guacamole_connection_id = conn_id
         vm_instance.save(update_fields=["guacamole_connection_id"])
 
-    token = _auth_token()
+    token = _create_user_token(vm_instance.guacamole_connection_id)
     return (
         f"/guacamole/#/client/{vm_instance.guacamole_connection_id}"
         f"?token={token}"
