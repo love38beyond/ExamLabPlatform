@@ -107,20 +107,16 @@ $unattend = @'
             <TimeZone>China Standard Time</TimeZone>
             <RegisteredOwner>ExamLab</RegisteredOwner>
         </component>
+        <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <InputLocale>0804:00000804</InputLocale>
+            <SystemLocale>zh-CN</SystemLocale>
+            <UILanguage>en-US</UILanguage>
+            <UserLocale>zh-CN</UserLocale>
+        </component>
     </settings>
     <settings pass="specialize">
-        <component name="Microsoft-Windows-TerminalServices-LocalSessionManager" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-            <fDenyTSConnections>false</fDenyTSConnections>
-        </component>
-        <component name="Microsoft-Windows-TerminalServices-RDP-WinStationExtensions" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-            <UserAuthentication>0</UserAuthentication>
-        </component>
-        <component name="Networking-MPSSVC-Svc" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
-            <FirewallGroup>
-                <Group>Remote Desktop</Group>
-                <Active>true</Active>
-                <Profile>all</Profile>
-            </FirewallGroup>
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+            <ComputerName>*</ComputerName>
         </component>
     </settings>
 </unattend>
@@ -173,5 +169,5 @@ if ($chrome) {
 
 Write-Host "`n========================================" -ForegroundColor Cyan
 Write-Host "  All checks passed! Ready to Sysprep." -ForegroundColor Cyan
-Write-Host "  Run: C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown /unattend:unattend.xml" -ForegroundColor Cyan
+Write-Host "  Run: C:\Windows\System32\Sysprep\sysprep.exe /oobe /generalize /shutdown /unattend:C:\Windows\System32\Sysprep\unattend.xml" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
