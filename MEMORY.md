@@ -1,0 +1,5 @@
+- [Project Overview](memory/project-overview.md) — Tech stack, architecture, and purpose of ExamLabPlatform
+- [Architecture Decisions](memory/architecture-decisions.md) — Key design decisions and rationale
+- [Tencent Cloud Infrastructure](memory/tencent-cloud-infra.md) — VPC layout, security groups, CVM specs
+- [Deployment Workflow](memory/deployment-workflow.md) — Deploy, upgrade, and operate the platform
+- [User Preferences](memory/user-preferences.md) — Communication language, scope, and priorities
