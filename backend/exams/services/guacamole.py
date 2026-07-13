@@ -113,6 +113,9 @@ def create_rdp_connection(
             "enable-font-smoothing": "true",
             "enable-drive": "true",
             "create-drive-path": "true",
+            "drive-path": "/tmp/guacamole-drive",
+            "disable-upload": "false",
+            "disable-download": "false",
             "enable-printing": "false",
         }
         params.update(kwargs)
