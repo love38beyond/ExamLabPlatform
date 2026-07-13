@@ -111,8 +111,8 @@ def create_rdp_connection(
             "resize-method": "display-update",
             "enable-wallpaper": "true",
             "enable-font-smoothing": "true",
-            "enable-drive": "false",
-            "create-drive-path": "false",
+            "enable-drive": "true",
+            "create-drive-path": "true",
             "enable-printing": "false",
         }
         params.update(kwargs)
