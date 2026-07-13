@@ -37,17 +37,27 @@ def create_security_group(name: str) -> str:
     resp = client.CreateSecurityGroup(req)
     sg_id = resp.SecurityGroup.SecurityGroupId
 
-    def _make_policy(sg_id):
+    def _make_policy(sg_id, protocol="ALL", port="ALL"):
         p = vpc_models.SecurityGroupPolicy()
-        p.Protocol = "ALL"
-        p.Port = "ALL"
+        p.Protocol = protocol
+        p.Port = port
         p.SecurityGroupId = sg_id
         p.Action = "ACCEPT"
         return p
 
-    # Ingress: allow all within same SG
+    # Ingress: allow all within same SG + RDP from VPC
     in_policy_set = vpc_models.SecurityGroupPolicySet()
-    in_policy_set.Ingress = [_make_policy(sg_id)]
+    in_rules = [_make_policy(sg_id)]
+
+    # Also allow RDP (TCP:3389) from anywhere in VPC for Guacamole
+    rdp_policy = vpc_models.SecurityGroupPolicy()
+    rdp_policy.Protocol = "TCP"
+    rdp_policy.Port = "3389"
+    rdp_policy.CidrBlock = getattr(settings, "TENCENT_VPC_CIDR", "10.0.0.0/16")
+    rdp_policy.Action = "ACCEPT"
+    in_rules.append(rdp_policy)
+
+    in_policy_set.Ingress = in_rules
     in_req = vpc_models.CreateSecurityGroupPoliciesRequest()
     in_req.SecurityGroupId = sg_id
     in_req.SecurityGroupPolicySet = in_policy_set
@@ -156,8 +166,8 @@ def get_instance_types(cpu, ram):
 
 
 def generate_password(length=12):
-    """Generate a random Windows admin password."""
-    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    """Generate a random admin password (alphanumeric only for cloud-init compat)."""
+    alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
