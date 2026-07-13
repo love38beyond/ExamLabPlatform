@@ -225,3 +225,15 @@ class VmInstanceAdmin(admin.ModelAdmin):
             obj.get_status_display(),
         )
     status_badge.short_description = "Status"
+
+    def delete_queryset(self, request, queryset):
+        """Terminate cloud instances before bulk-deleting DB records."""
+        from .services.tencent import terminate_instances
+
+        for instance in queryset:
+            if instance.cvm_instance_id and instance.status != "terminated":
+                try:
+                    terminate_instances([instance.cvm_instance_id])
+                except Exception:
+                    pass
+        super().delete_queryset(request, queryset)

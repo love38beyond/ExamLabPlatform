@@ -1,5 +1,9 @@
+import logging
+
 from django.conf import settings
 from django.db import models
+
+logger = logging.getLogger(__name__)
 
 
 class Exam(models.Model):
@@ -85,3 +89,23 @@ class VmInstance(models.Model):
 
     def __str__(self):
         return f"{self.get_vm_type_display()} - {self.group}"
+
+    def delete(self, *args, **kwargs):
+        """Delete DB record AND terminate the actual CVM on Tencent Cloud."""
+        if self.cvm_instance_id and self.status != self.Status.TERMINATED:
+            try:
+                from .services.tencent import terminate_instances
+
+                terminate_instances([self.cvm_instance_id])
+                logger.info(
+                    "Terminated CVM %s before deleting VmInstance %s",
+                    self.cvm_instance_id,
+                    self.id,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to terminate CVM %s: %s",
+                    self.cvm_instance_id,
+                    e,
+                )
+        super().delete(*args, **kwargs)
